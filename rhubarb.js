@@ -5,6 +5,20 @@ import http from "http";
 import os from "os";
 import path from "path";
 
+function findWavDataOffset(buffer) {
+  for (let i = 0; i < buffer.length - 4; i++) {
+    if (
+      buffer[i] === 0x64 &&
+      buffer[i+1] === 0x61 && 
+      buffer[i+2] === 0x74 && 
+      buffer[i+3] === 0x61
+    ) {
+      return i + 8;
+    }
+  }
+  return 44; 
+}
+
 function downloadFile(url, destPath) {
   return new Promise((resolve, reject) => {
     const file = fs.createWriteStream(destPath);
@@ -67,8 +81,8 @@ function runRhubarb(audioURL) {
         fs.unlink(tmpJson, () => {});
         try {
           const lipsync = JSON.parse(jsonData);
-          // Strip 44-byte WAV header to get raw int16 PCM, same as Python
-          const audioBase64 = wavData.slice(44).toString("base64");
+        const offset = findWavDataOffset(wavData);
+        const audioBase64 = wavData.slice(offset).toString("base64");
           resolve({ lipsync, audio: audioBase64 });
         } catch {
           reject(new Error("Error parsing Rhubarb output: " + jsonData));
