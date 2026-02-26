@@ -42,31 +42,41 @@ function runRhubarb(audioURL) {
 
     let errorData = "";
 
+    rhubarb.on("error", (err) => {
+      reject(new Error("Failed to spawn Rhubarb: " + err.message));
+    });
+
     rhubarb.stderr.on("data", (data) => {
       errorData += data.toString();
     });
 
     rhubarb.on("close", (code) => {
-      fs.unlink(tmpWav, () => {});
       console.log("Rhubarb closed with code:", code);
-      console.log("Output file path:", tmpJson);
-      console.log("Output file exists:", fs.existsSync(tmpJson));
 
       if (code !== 0) {
+        fs.unlink(tmpWav, () => {});
         fs.unlink(tmpJson, () => {});
         return reject(new Error(`Rhubarb exited with code ${code}. Stderr: ${errorData}`));
       }
 
-      fs.readFile(tmpJson, "utf8", (err, data) => {
+      Promise.all([
+        fs.promises.readFile(tmpJson, "utf8"),
+        fs.promises.readFile(tmpWav)
+      ]).then(([jsonData, wavData]) => {
+        fs.unlink(tmpWav, () => {});
         fs.unlink(tmpJson, () => {});
-        if (err) {
-          return reject(new Error("Failed to read Rhubarb output file: " + err.message));
-        }
         try {
-          resolve(JSON.parse(data));
+          const lipsync = JSON.parse(jsonData);
+          // Strip 44-byte WAV header to get raw int16 PCM, same as Python
+          const audioBase64 = wavData.slice(44).toString("base64");
+          resolve({ lipsync, audio: audioBase64 });
         } catch {
-          reject(new Error("Error parsing Rhubarb output: " + data));
+          reject(new Error("Error parsing Rhubarb output: " + jsonData));
         }
+      }).catch((err) => {
+        fs.unlink(tmpWav, () => {});
+        fs.unlink(tmpJson, () => {});
+        reject(new Error("Failed to read output files: " + err.message));
       });
     });
   });
