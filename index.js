@@ -51,7 +51,7 @@ app.post("/phonetic", async (req, res) => {
       speed: 1,
       use_gpu: false,
     });
-    audioURL = result.data[0].url;
+    const audioURL = result.data[0].url;
     console.log(audioURL);
     const lipsyncData = await runRhubarb(audioURL);
     res.json(lipsyncData);
